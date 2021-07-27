@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"net"
+	"os"
 )
 
 type Client struct {
@@ -34,6 +36,18 @@ func NewClient(serverIP string, serverPort int) *Client {
 	return client
 }
 
+// 处理server回应的消息，直接显示到标准输出即可
+func (client *Client) DealResponse() {
+	// 一旦client.conn有数据就直接copy到stdout标准输出，永久阻塞监听
+	io.Copy(os.Stdout, client.conn)
+	// //
+	// for {
+	// 	buf := make()
+	// 	client.conn.Read(buf)
+	// 	fmt.Println(buf)
+	// }
+}
+
 func (client *Client) menu() bool {
 	var flag int
 
@@ -53,6 +67,19 @@ func (client *Client) menu() bool {
 	}
 }
 
+func (client *Client) UpdateName() bool {
+	fmt.Println(">>>请输入用户名:")
+	fmt.Scanln(&client.Name)
+
+	sendMsg := "rename|" + client.Name + "\n"
+	_, err := client.conn.Write([]byte(sendMsg))
+	if err != nil {
+		fmt.Println("conn.Write err:", err)
+		return false
+	}
+	return true
+}
+
 func (client *Client) Run() {
 	for client.flag != 0 {
 		for client.menu() != true {
@@ -69,6 +96,7 @@ func (client *Client) Run() {
 			fmt.Println("私聊模式选择...")
 		case 3:
 			// 更新用户名
+			client.UpdateName()
 			fmt.Println("更新用户名选择...")
 
 		}
@@ -94,6 +122,10 @@ func main() {
 		fmt.Println(">>>连接服务器失败...")
 		return
 	}
+
+	// 单独开启一个goroutine去处理server的响应消息
+	go client.DealResponse()
+
 	fmt.Println(">>>连接服务器成功...")
 
 	// 启动客户端的业务
